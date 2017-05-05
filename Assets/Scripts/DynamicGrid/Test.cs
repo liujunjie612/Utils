@@ -23,7 +23,7 @@ namespace DynamicGridFloader
 
         private void iniData()
         {
-            for(int i=0;i<100;i++)
+            for(int i=0;i<3;i++)
             {
                 CellVo v = new CellVo();
                 v.id = i.ToString();

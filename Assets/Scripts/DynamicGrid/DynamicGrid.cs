@@ -18,6 +18,7 @@ namespace DynamicGridFloader
         private RectTransform _content;
         private int _previousTopIndex = -1;
         private int _pageCount;
+        private bool _firstIni = true;
 
         private List<Cell> _activeList = new List<Cell>();
         private List<Cell> _catchList = new List<Cell>();
@@ -79,15 +80,21 @@ namespace DynamicGridFloader
 
             if (goUp)
                 _content.anchoredPosition = Vector2.zero;
+
+            if (!_firstIni && _dataList.Count < _pageCount)
+                refreshData(0, true);
+
+            _firstIni = false;
         }
 
         /// <summary>
         /// 刷新数据
         /// </summary>
         /// <param name="index">刷新数据的其实标识点</param>
-        private void refreshData(int index)
+        /// <param name="ignore">当重新赋值时，data的长度小于可显示的长度，这是要刷新一下数据，因为索引值不会变</param>
+        private void refreshData(int index, bool ignore = false)
         {
-            if (_previousTopIndex == index || index < 0)
+            if ((_previousTopIndex == index || index < 0) && !ignore)
                 return;
 
             _previousTopIndex = index;
