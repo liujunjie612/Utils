@@ -1,15 +1,18 @@
 ﻿using UnityEngine;
 using System.Collections;
-using UGUIExt;
 using UnityEngine.UI;
 
-public class Cell : AbstractCell {
+public class Cell: MonoBehaviour {
 
     public Text txt;
 
-    protected override void paintData()
+    public void SetData(CellVo s)
     {
-        string s = data as string;
-        txt.text = s;
+        txt.text = s.id;
     }
+}
+
+public class CellVo
+{
+    public string id;
 }

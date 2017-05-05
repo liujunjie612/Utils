@@ -1,278 +1,173 @@
 ﻿using UnityEngine;
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine.UI;
-using UnityEngine.EventSystems;
-using System;
-using UGUIExt;
 
-public class DynamicGrid : MonoBehaviour, IDropHandler
+namespace DynamicGridFloader
 {
-
-    public enum Direction
+    public class DynamicGrid : MonoBehaviour
     {
-        Top,
-        Bottom
-    };
 
-    public event Action<int, AbstractCell> FillItem = delegate { };
-    public event Action<Direction> PullLoad = delegate { };
+        public float cellX;
+        public float cellY;
+        public float space;
+        public GameObject prefab;
 
-    [Header("Item settings")]
-    public GameObject prefab;
-    public int height = 110;
+        private ScrollRect _scrollRect;
+        private RectTransform _scrollRectRectT;
+        private RectTransform _content;
+        private int _previousTopIndex = -1;
+        private int _pageCount;
 
-    [Header("Padding")]
-    public int top = 10;
-    public int bottom = 10;
-    public int spacing = 2;
+        private List<Cell> _activeList = new List<Cell>();
+        private List<Cell> _catchList = new List<Cell>();
+        private List<CellVo> _dataList = new List<CellVo>();
 
-    [Header("Labels")]
-    public string topPullLabel = "上拉刷新";
-    public string topReleaseLabel = "释放加载";
-    public string bottomPullLabel = "上拉刷新";
-    public string bottomReleaseLabel = "释放加载";
-
-    [Header("Directions")]
-    public bool isPullTop = true;
-    public bool isPullBottom = true;
-
-    [Header("Pull coefficient")]
-    [Range(0.01f, 0.1f)]
-    public float pullValue = 0.05f;
-
-    [HideInInspector]
-    public Text topLabel;
-    [HideInInspector]
-    public Text bottomLabel;
-
-    private ScrollRect _scroll;
-    private RectTransform _content;
-    private RectTransform[] _rects;
-    private AbstractCell[] _views;
-    private bool _isCanLoadUp;
-    private bool _isCanLoadDown;
-    private int _previousPosition;
-    private int _count;
-
-    void Awake()
-    {
-        _scroll = GetComponent<ScrollRect>();
-        _scroll.onValueChanged.AddListener(OnScrollChange);
-        _content = _scroll.viewport.transform.GetChild(0).GetComponent<RectTransform>();
-        CreateViews();
-        CreateLabels();
-    }
-
-    void Update()
-    {
-        if (_count == 0)
-            return;
-        float _topPosition = _content.anchoredPosition.y - spacing;
-        if (_topPosition <= 0f && _rects[0].anchoredPosition.y < -top - 10f)
+        void Awake()
         {
-            InitData(_count);
-            return;
+            creat();
         }
-        if (_topPosition < 0f)
-            return;
-        int position = Mathf.FloorToInt(_topPosition / (height + spacing));
-        if (_previousPosition == position)
-            return;
-        if (position > _previousPosition)
+
+        void Update()
         {
-            if (position - _previousPosition > 1)
-                position = _previousPosition + 1;
-            int newPosition = position % _views.Length;
-            newPosition--;
-            if (newPosition < 0)
-                newPosition = _views.Length - 1;
-            int index = position + _views.Length - 1;
-            if (index < _count)
+            int currentIndex = getTopIndex();
+            if (currentIndex != _previousTopIndex)
             {
-                Vector2 pos = _rects[newPosition].anchoredPosition;
-                pos.y = -(top + index * spacing + index * height);
-                _rects[newPosition].anchoredPosition = pos;
-                FillItem(index, _views[newPosition]);
+                refreshData(currentIndex);
             }
         }
-        else
-        {
-            if (_previousPosition - position > 1)
-                position = _previousPosition - 1;
-            int newIndex = position % _views.Length;
-            Vector2 pos = _rects[newIndex].anchoredPosition;
-            pos.y = -(top + position * spacing + position * height);
-            _rects[newIndex].anchoredPosition = pos;
-            FillItem(position, _views[newIndex]);
-        }
-        _previousPosition = position;
-    }
 
-    void OnScrollChange(Vector2 vector)
-    {
-        float coef = _count / _views.Length;
-        float y = 0f;
-        _isCanLoadUp = false;
-        _isCanLoadDown = false;
-        if (vector.y > 1f)
-            y = (vector.y - 1f) * coef;
-        else if (vector.y < 0f)
-            y = vector.y * coef;
-        if (y > pullValue && isPullTop)
+        /// <summary>
+        /// 创建物体
+        /// </summary>
+        private void creat()
         {
-            topLabel.gameObject.SetActive(true);
-            topLabel.text = topPullLabel;
-            if (y > pullValue * 2)
+            _scrollRect = this.GetComponent<ScrollRect>();
+            _scrollRectRectT = _scrollRect.GetComponent<RectTransform>();
+            _content = _scrollRect.content;
+
+            _pageCount = Mathf.FloorToInt(_scrollRectRectT.sizeDelta.y / (cellY + space)) + 3;
+            Vector2 size = new Vector2(cellX, cellY);
+            for (int i = 0; i < _pageCount; i++)
             {
-                topLabel.text = topReleaseLabel;
-                _isCanLoadUp = true;
+                GameObject go = Instantiate(prefab);
+                go.GetComponent<RectTransform>().sizeDelta = size;
+                go.transform.SetParent(_content);
+                go.transform.localScale = Vector3.one;
+                go.GetComponent<RectTransform>().anchoredPosition = Vector2.zero;
+                go.SetActive(false);
+
+                Cell c = go.GetComponent<Cell>();
+                _catchList.Add(c);
             }
         }
-        else
-            topLabel.gameObject.SetActive(false);
-        if (y < -pullValue && isPullBottom)
+
+        /// <summary>
+        /// 设置数据
+        /// </summary>
+        /// <param name="data"></param>
+        /// <param name="goUp">是否移到最顶端</param>
+        public void SetData(List<CellVo> data, bool goUp = true)
         {
-            bottomLabel.gameObject.SetActive(true);
-            bottomLabel.text = bottomPullLabel;
-            if (y < -pullValue * 2)
+            _dataList = data;
+
+            //计算content高度
+            float height = (cellY + space) * _dataList.Count - space;
+            Vector2 size = _content.sizeDelta;
+            size.y = height;
+            _content.sizeDelta = size;
+
+            if (goUp)
+                _content.anchoredPosition = Vector2.zero;
+        }
+
+        /// <summary>
+        /// 刷新数据
+        /// </summary>
+        /// <param name="index">刷新数据的其实标识点</param>
+        private void refreshData(int index)
+        {
+            if (_previousTopIndex == index || index < 0)
+                return;
+
+            _previousTopIndex = index;
+            catchAllCell();
+            for (int i = 0; i < _pageCount; i++)
             {
-                bottomLabel.text = bottomReleaseLabel;
-                _isCanLoadDown = true;
+                if (index + i >= _dataList.Count)
+                    break;
+                Cell c = activeACell();
+                c.GetComponent<RectTransform>().anchoredPosition = getCellPos(index + i);
+                c.SetData(_dataList[index + i]);
             }
         }
-        else
-            bottomLabel.gameObject.SetActive(false);
-    }
 
-    public void OnDrop(PointerEventData eventData)
-    {
-        if (_isCanLoadUp)
-            PullLoad(Direction.Top);
-        else if (_isCanLoadDown)
-            PullLoad(Direction.Bottom);
-        _isCanLoadUp = false;
-        _isCanLoadDown = false;
-    }
-
-    public void InitData(int count)
-    {
-        _previousPosition = 0;
-        _count = count;
-        float h = height * count * 1f + top + bottom + (count == 0 ? 0 : ((count - 1) * spacing));
-        _content.sizeDelta = new Vector2(_content.sizeDelta.x, h);
-        Vector2 pos = _content.anchoredPosition;
-        pos.y = 0f;
-        _content.anchoredPosition = pos;
-        int y = top;
-        bool showed = false;
-        for (int i = 0; i < _views.Length; i++)
+        /// <summary>
+        /// 获取最上面显示的Cell的索引
+        /// </summary>
+        /// <returns></returns>
+        private int getTopIndex()
         {
-            showed = i < count;
-            _views[i].gameObject.SetActive(showed);
-            pos = _rects[i].anchoredPosition;
-            pos.y = -y;
-            pos.x = 0f;
-            _rects[i].anchoredPosition = pos;
-            y += spacing + height;
-            if (i + 1 > _count)
-                continue;
-            FillItem(i, _views[i]);
+            int index = 0;
+            float topPos = _content.anchoredPosition.y;
+            index = Mathf.FloorToInt(topPos / (cellY + space));
+            return index;
+        }
+
+        /// <summary>
+        /// 获取第N个Cell的位置
+        /// </summary>
+        /// <param name="index"></param>
+        /// <returns></returns>
+        private Vector2 getCellPos(int index)
+        {
+            Vector2 pos = Vector2.zero;
+            pos.y = index * (cellY + space) * -1f;
+            return pos;
+        }
+
+        /// <summary>
+        /// 激活一个Cell
+        /// </summary>
+        /// <returns></returns>
+        private Cell activeACell()
+        {
+            Cell c = null;
+            if (_catchList.Count > 0)
+            {
+                c = _catchList[_catchList.Count - 1];
+                _catchList.RemoveAt(_catchList.Count - 1);
+                _activeList.Add(c);
+            }
+            else
+            {
+
+            }
+
+            c.gameObject.SetActive(true);
+            return c;
+        }
+
+        /// <summary>
+        /// 缓存一个Cell
+        /// </summary>
+        /// <param name="c"></param>
+        private void catchACell(Cell c)
+        {
+            _catchList.Add(c);
+            _activeList.Remove(c);
+            c.gameObject.SetActive(false);
+        }
+
+        /// <summary>
+        /// 缓存所有Cell
+        /// </summary>
+        private void catchAllCell()
+        {
+            for (int i = _activeList.Count - 1; i >= 0; i--)
+            {
+                catchACell(_activeList[i]);
+            }
         }
     }
-
-    public void ApplyDataTo(int count, int newCount, Direction direction)
-    {
-        _count = count;
-        float newHeight = height * count * 1f + top + bottom + (count == 0 ? 0 : ((count - 1) * spacing));
-        _content.sizeDelta = new Vector2(_content.sizeDelta.x, newHeight);
-        Vector2 pos = _content.anchoredPosition;
-        if (direction == Direction.Top)
-        {
-            pos.y = (height + spacing) * newCount;
-            _previousPosition = newCount;
-        }
-        else
-            pos.y = newHeight - (height * spacing) * newCount - (float)Screen.currentResolution.height;
-        _content.anchoredPosition = pos;
-        float _topPosition = _content.anchoredPosition.y - spacing;
-        int index = Mathf.FloorToInt(_topPosition / (height + spacing));
-        int all = top + index * spacing + index * height;
-        for (int i = 0; i < _views.Length; i++)
-        {
-            int newIndex = index % _views.Length;
-            FillItem(index, _views[newIndex]);
-            pos = _rects[newIndex].anchoredPosition;
-            pos.y = -all;
-            _rects[newIndex].anchoredPosition = pos;
-            all += spacing + height;
-            index++;
-            if (index == _count)
-                break;
-        }
-    }
-
-    void CreateViews()
-    {
-        GameObject clone;
-        RectTransform rect;
-        int fillCount = Mathf.RoundToInt((float)_scroll.GetComponent<RectTransform>().sizeDelta.y / (height + spacing)) + 2;
-        _views = new AbstractCell[fillCount];
-        for (int i = 0; i < fillCount; i++)
-        {
-            clone = (GameObject)Instantiate(prefab, Vector3.zero, Quaternion.identity);
-            clone.transform.SetParent(_content);
-            clone.transform.localScale = Vector3.one;
-            clone.transform.localPosition = Vector3.zero;
-            rect = clone.GetComponent<RectTransform>();
-            rect.pivot = new Vector2(0.5f, 1f);
-            rect.anchorMin = new Vector2(0f, 1f);
-            rect.anchorMax = new Vector2(1f, 1f);
-            rect.offsetMax = new Vector2(0f, 0f);
-            rect.offsetMin = new Vector2(0f, -height);
-            _views[i] = clone.GetComponent<AbstractCell>();
-        }
-        _rects = new RectTransform[_views.Length];
-        for (int i = 0; i < _views.Length; i++)
-            _rects[i] = _views[i].gameObject.GetComponent<RectTransform>();
-    }
-
-    void CreateLabels()
-    {
-        GameObject topText = new GameObject("TopLabel");
-        topText.transform.SetParent(_scroll.viewport.transform);
-        topLabel = topText.AddComponent<Text>();
-        topLabel.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
-        topLabel.fontSize = 24;
-        topLabel.transform.localScale = Vector3.one;
-        topLabel.alignment = TextAnchor.MiddleCenter;
-        topLabel.text = topPullLabel;
-        RectTransform rect = topLabel.GetComponent<RectTransform>();
-        rect.pivot = new Vector2(0.5f, 1f);
-        rect.anchorMin = new Vector2(0f, 1f);
-        rect.anchorMax = new Vector2(1f, 1f);
-        rect.offsetMax = new Vector2(0f, 0f);
-        rect.offsetMin = new Vector2(0f, -55f);
-        rect.anchoredPosition3D = Vector3.zero;
-        topText.SetActive(false);
-
-        GameObject bottomText = new GameObject("BottomLabel");
-        bottomText.transform.SetParent(_scroll.viewport.transform);
-        bottomLabel = bottomText.AddComponent<Text>();
-        bottomLabel.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
-        bottomLabel.fontSize = 24;
-        bottomLabel.transform.localScale = Vector3.one;
-        bottomLabel.alignment = TextAnchor.MiddleCenter;
-        bottomLabel.text = bottomPullLabel;
-        bottomLabel.transform.position = Vector3.zero;
-        rect = bottomLabel.GetComponent<RectTransform>();
-        rect.pivot = new Vector2(0.5f, 0f);
-        rect.anchorMin = new Vector2(0f, 0f);
-        rect.anchorMax = new Vector2(1f, 0f);
-        rect.offsetMax = new Vector2(0f, 55f);
-        rect.offsetMin = new Vector2(0f, 0f);
-        rect.anchoredPosition3D = Vector3.zero;
-        bottomText.SetActive(false);
-    }
-
-
 }
