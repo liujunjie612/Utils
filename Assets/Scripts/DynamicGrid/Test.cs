@@ -18,7 +18,7 @@ namespace DynamicGridFloader
 
         void Start()
         {
-            grid.SetData(data);
+            grid.SetData(data.ToArray());
         }
 
         private void iniData()
@@ -41,7 +41,7 @@ namespace DynamicGridFloader
                 data.Add(v);
 
 
-                grid.SetData(data, false);
+                grid.SetData(data.ToArray(), false);
             }
         }
     }

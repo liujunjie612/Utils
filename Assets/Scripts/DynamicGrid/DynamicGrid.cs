@@ -20,9 +20,9 @@ namespace DynamicGridFloader
         private int _pageCount;
         private bool _firstIni = true;
 
-        private List<Cell> _activeList = new List<Cell>();
-        private List<Cell> _catchList = new List<Cell>();
-        private List<CellVo> _dataList = new List<CellVo>();
+        private List<AbstractCell> _activeList = new List<AbstractCell>();
+        private List<AbstractCell> _catchList = new List<AbstractCell>();
+        private object[] _dataList;
 
         void Awake()
         {
@@ -58,7 +58,7 @@ namespace DynamicGridFloader
                 go.GetComponent<RectTransform>().anchoredPosition = Vector2.zero;
                 go.SetActive(false);
 
-                Cell c = go.GetComponent<Cell>();
+                AbstractCell c = go.GetComponent<AbstractCell>();
                 _catchList.Add(c);
             }
         }
@@ -68,12 +68,12 @@ namespace DynamicGridFloader
         /// </summary>
         /// <param name="data"></param>
         /// <param name="goUp">是否移到最顶端</param>
-        public void SetData(List<CellVo> data, bool goUp = true)
+        public void SetData(object[] data, bool goUp = true)
         {
             _dataList = data;
 
             //计算content高度
-            float height = (cellY + space) * _dataList.Count - space;
+            float height = (cellY + space) * _dataList.Length - space;
             Vector2 size = _content.sizeDelta;
             size.y = height;
             _content.sizeDelta = size;
@@ -81,7 +81,7 @@ namespace DynamicGridFloader
             if (goUp)
                 _content.anchoredPosition = Vector2.zero;
 
-            if (!_firstIni && _dataList.Count < _pageCount)
+            if (!_firstIni && _dataList.Length < _pageCount)
                 refreshData(0, true);
 
             _firstIni = false;
@@ -101,16 +101,16 @@ namespace DynamicGridFloader
             catchAllCell();
             for (int i = 0; i < _pageCount; i++)
             {
-                if (index + i >= _dataList.Count)
+                if (index + i >= _dataList.Length)
                     break;
-                Cell c = activeACell();
-                c.GetComponent<RectTransform>().anchoredPosition = getCellPos(index + i);
-                c.SetData(_dataList[index + i]);
+                AbstractCell c = activeACell();
+                c.rectTransform.anchoredPosition = getCellPos(index + i);
+                c.data = _dataList[index + i];
             }
         }
 
         /// <summary>
-        /// 获取最上面显示的Cell的索引
+        /// 获取最上面显示的AbstractCell的索引
         /// </summary>
         /// <returns></returns>
         private int getTopIndex()
@@ -122,7 +122,7 @@ namespace DynamicGridFloader
         }
 
         /// <summary>
-        /// 获取第N个Cell的位置
+        /// 获取第N个AbstractCell的位置
         /// </summary>
         /// <param name="index"></param>
         /// <returns></returns>
@@ -134,12 +134,12 @@ namespace DynamicGridFloader
         }
 
         /// <summary>
-        /// 激活一个Cell
+        /// 激活一个AbstractCell
         /// </summary>
         /// <returns></returns>
-        private Cell activeACell()
+        private AbstractCell activeACell()
         {
-            Cell c = null;
+            AbstractCell c = null;
             if (_catchList.Count > 0)
             {
                 c = _catchList[_catchList.Count - 1];
@@ -156,10 +156,10 @@ namespace DynamicGridFloader
         }
 
         /// <summary>
-        /// 缓存一个Cell
+        /// 缓存一个AbstractCell
         /// </summary>
         /// <param name="c"></param>
-        private void catchACell(Cell c)
+        private void catchACell(AbstractCell c)
         {
             _catchList.Add(c);
             _activeList.Remove(c);
@@ -167,7 +167,7 @@ namespace DynamicGridFloader
         }
 
         /// <summary>
-        /// 缓存所有Cell
+        /// 缓存所有AbstractCell
         /// </summary>
         private void catchAllCell()
         {
