@@ -49,23 +49,7 @@ namespace DynamicGridFloader
             _scrollRectRectT = _scrollRect.GetComponent<RectTransform>();
             _content = _scrollRect.content;
 
-            _pageCountY = Mathf.FloorToInt(_scrollRectRectT.sizeDelta.y / (cellY + spaceY)) + 3;
-            Vector2 size = new Vector2(cellX, cellY);
-            for (int i = 0; i < _pageCountY; i++)
-            {
-                for (int j = 0; j < countX; j++)
-                {
-                    GameObject go = Instantiate(prefab);
-                    go.GetComponent<RectTransform>().sizeDelta = size;
-                    go.transform.SetParent(_content);
-                    go.transform.localScale = Vector3.one;
-                    go.GetComponent<RectTransform>().anchoredPosition = Vector2.zero;
-                    go.SetActive(false);
-
-                    AbstractCell c = go.GetComponent<AbstractCell>();
-                    _catchList.Add(c);
-                }
-            }
+            _pageCountY = Mathf.FloorToInt(_scrollRectRectT.sizeDelta.y / (cellY + spaceY)) + 2;
         }
 
         /// <summary>
@@ -86,9 +70,14 @@ namespace DynamicGridFloader
             if (goUp)
                 _content.anchoredPosition = Vector2.zero;
 
-            if (!_firstIni && _dataList.Length < _pageCountY * countX)
+            if (!_firstIni && _dataList.Length <= _pageCountY * countX)
                 refreshData(0, true);
-
+            else if (_previousTopIndex >= (_dataList.Length + countX - 1) / countX - _pageCountY)
+            {
+                //是为了让列表滑到底了也会也会刷新数据（因为这时_previousTopIndex 和 getTopIndex() 一致，不会刷新），不刷新的话底部可能会有空缺但不会填充数据
+                _previousTopIndex -= 1;
+                refreshData(getTopIndex(), false);
+            }
             _firstIni = false;
         }
 
@@ -158,7 +147,14 @@ namespace DynamicGridFloader
             }
             else
             {
+                GameObject go = Instantiate(prefab);
+                go.GetComponent<RectTransform>().sizeDelta = new Vector2(cellX, cellY);
+                go.transform.SetParent(_content);
+                go.transform.localScale = Vector3.one;
+                go.GetComponent<RectTransform>().anchoredPosition = Vector2.zero;
 
+                c = go.GetComponent<AbstractCell>();
+                _activeList.Add(c);
             }
 
             c.gameObject.SetActive(true);
