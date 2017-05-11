@@ -10,14 +10,16 @@ namespace DynamicGridFloader
 
         public float cellX;
         public float cellY;
-        public float space;
+        public float spaceX;
+        public float spaceY;
+        public int countX;
         public GameObject prefab;
 
         private ScrollRect _scrollRect;
         private RectTransform _scrollRectRectT;
         private RectTransform _content;
         private int _previousTopIndex = -1;
-        private int _pageCount;
+        private int _pageCountY;
         private bool _firstIni = true;
 
         private List<AbstractCell> _activeList = new List<AbstractCell>();
@@ -47,19 +49,22 @@ namespace DynamicGridFloader
             _scrollRectRectT = _scrollRect.GetComponent<RectTransform>();
             _content = _scrollRect.content;
 
-            _pageCount = Mathf.FloorToInt(_scrollRectRectT.sizeDelta.y / (cellY + space)) + 3;
+            _pageCountY = Mathf.FloorToInt(_scrollRectRectT.sizeDelta.y / (cellY + spaceY)) + 3;
             Vector2 size = new Vector2(cellX, cellY);
-            for (int i = 0; i < _pageCount; i++)
+            for (int i = 0; i < _pageCountY; i++)
             {
-                GameObject go = Instantiate(prefab);
-                go.GetComponent<RectTransform>().sizeDelta = size;
-                go.transform.SetParent(_content);
-                go.transform.localScale = Vector3.one;
-                go.GetComponent<RectTransform>().anchoredPosition = Vector2.zero;
-                go.SetActive(false);
+                for (int j = 0; j < countX; j++)
+                {
+                    GameObject go = Instantiate(prefab);
+                    go.GetComponent<RectTransform>().sizeDelta = size;
+                    go.transform.SetParent(_content);
+                    go.transform.localScale = Vector3.one;
+                    go.GetComponent<RectTransform>().anchoredPosition = Vector2.zero;
+                    go.SetActive(false);
 
-                AbstractCell c = go.GetComponent<AbstractCell>();
-                _catchList.Add(c);
+                    AbstractCell c = go.GetComponent<AbstractCell>();
+                    _catchList.Add(c);
+                }
             }
         }
 
@@ -73,15 +78,15 @@ namespace DynamicGridFloader
             _dataList = data;
 
             //计算content高度
-            float height = (cellY + space) * _dataList.Length - space;
-            Vector2 size = _content.sizeDelta;
-            size.y = height;
+            float height = (cellY + spaceY) * ((_dataList.Length + countX - 1) / countX) - spaceY;
+            float width = (cellX + spaceX) * countX - spaceX;
+            Vector2 size = new Vector2(width, height);
             _content.sizeDelta = size;
 
             if (goUp)
                 _content.anchoredPosition = Vector2.zero;
 
-            if (!_firstIni && _dataList.Length < _pageCount)
+            if (!_firstIni && _dataList.Length < _pageCountY * countX)
                 refreshData(0, true);
 
             _firstIni = false;
@@ -99,13 +104,17 @@ namespace DynamicGridFloader
 
             _previousTopIndex = index;
             catchAllCell();
-            for (int i = 0; i < _pageCount; i++)
+            for (int i = 0; i < _pageCountY; i++)
             {
-                if (index + i >= _dataList.Length)
-                    break;
-                AbstractCell c = activeACell();
-                c.rectTransform.anchoredPosition = getCellPos(index + i);
-                c.data = _dataList[index + i];
+                for (int j = 0; j < countX; j++)
+                {
+                    int num = (index + i) * countX + j;
+                    if (num >= _dataList.Length)
+                        break;
+                    AbstractCell c = activeACell();
+                    c.rectTransform.anchoredPosition = getCellPos(index + i, j);
+                    c.data = _dataList[num];
+                }
             }
         }
 
@@ -117,7 +126,7 @@ namespace DynamicGridFloader
         {
             int index = 0;
             float topPos = _content.anchoredPosition.y;
-            index = Mathf.FloorToInt(topPos / (cellY + space));
+            index = Mathf.FloorToInt(topPos / (cellY + spaceY));
             return index;
         }
 
@@ -126,10 +135,11 @@ namespace DynamicGridFloader
         /// </summary>
         /// <param name="index"></param>
         /// <returns></returns>
-        private Vector2 getCellPos(int index)
+        private Vector2 getCellPos(int indexY, int indexX)
         {
             Vector2 pos = Vector2.zero;
-            pos.y = index * (cellY + space) * -1f;
+            pos.y = indexY * (cellY + spaceY) * -1f;
+            pos.x = indexX * (cellX + spaceX);
             return pos;
         }
 
