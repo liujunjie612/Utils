@@ -45,6 +45,15 @@ namespace DynamicGridFloader
         /// </summary>
         private void creat()
         {
+            #region 初始化时检测填入数据是否有误
+            if (countX <= 0)
+                countX = 1;
+            if (cellX <= 0)
+                cellX = 100;
+            if (cellY <= 0)
+                cellY = 50;
+            #endregion
+
             _scrollRect = this.GetComponent<ScrollRect>();
             _scrollRectRectT = _scrollRect.GetComponent<RectTransform>();
             _content = _scrollRect.content;
